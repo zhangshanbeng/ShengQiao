@@ -1,18 +1,29 @@
-name: Build Unsigned IPA
+name: Build Unsigned IPA (For Sideloadly自签)
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: # 支持手动点按钮触发构建
+  workflow_dispatch:
 jobs:
   build:
     runs-on: macos-latest
     steps:
       - name: Checkout代码
         uses: actions/checkout@v4
-      - name: 进入ios目录，安装CocoaPods
+
+      - name: 安装指定版本CocoaPods
+        run: |
+          gem install cocoapods -v 1.15.2
+          pod --version
+          
+      - name: 进入ios目录，更换国内镜像源并pod install
         run: |
           cd ios
-          pod install --repo-update
+          # 替换cocoapods源为清华镜像，解决github action网络超时
+          pod repo remove master || true
+          pod repo add master https://mirrors.tuna.tsinghua.edu.cn/git/cocoapods/specs.git
+          pod repo update
+          pod install --verbose
+          
       - name: Archive 不签名打包
         run: |
           cd ios
@@ -24,12 +35,14 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
+            
       - name: 从xcarchive提取app，打包成未签名IPA
         run: |
           cd ios/build/ShengQiao.xcarchive/Products/Applications
           mkdir -p Payload
           cp -r ShengQiao.app Payload/
           zip -qr ShengQiao_unsigned.ipa Payload
+          
       - name: 上传未签名IPA产物
         uses: actions/upload-artifact@v4
         with:
